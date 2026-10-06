@@ -1,0 +1,12 @@
+{
+  "name": "express-demo",
+  "version": "1.0.0",
+  "description": "Simple Express application with 2 API endpoints",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
