@@ -1,18 +1,88 @@
-name: Remote SSH Command
-on: [push]
+name: Deploy Express App to EC2
+
+on:
+  push:
+    branches:
+      - main
+
 jobs:
-  build:
-    name: Build
+  deploy:
+    name: Deploy to EC2
     runs-on: ubuntu-latest
+
     steps:
-      - name: Multiple commands
+      - name: Connect to EC2 and deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
           port: ${{ secrets.PORT }}
-          script: |
-            whoami
-            ls -al
 
+          script: |
+            echo "Connected to EC2"
+
+            # 1. Check Git
+            if ! command -v git >/dev/null 2>&1; then
+              echo "Git is not installed. Installing Git..."
+              sudo apt update
+              sudo apt install -y git
+            fi
+
+            # 2. Go to home directory
+            cd /home/ubuntu
+
+            # 3. Clone first time, otherwise pull latest code
+            if [ ! -d "express-app-EC2-deployment/.git" ]; then
+
+              echo "Repository not found. Cloning..."
+              git clone https://github.com/datascientistabhishek/express-app-EC2-deployment.git
+
+            else
+
+              echo "Repository already exists. Pulling latest changes..."
+              cd express-app-EC2-deployment
+              git fetch origin
+              git pull origin main
+
+            fi
+
+            # 4. Go inside application
+            cd /home/ubuntu/express-app-EC2-deployment
+
+            # 5. Check Node.js
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Node.js is not installed. Installing Node.js..."
+
+              sudo apt update
+              sudo apt install -y nodejs npm
+
+            else
+
+              echo "Node.js is already installed."
+              node --version
+              npm --version
+
+            fi
+
+            # 6. Install application dependencies
+            echo "Installing dependencies..."
+            npm install
+
+            # 7. Stop old application if running on port 3000
+            echo "Stopping old application..."
+
+            sudo fuser -k 3000/tcp || true
+
+            # 8. Start application
+            echo "Starting Express application..."
+
+            nohup npm start > app.log 2>&1 &
+
+            echo "Application started."
+
+            # 9. Show status
+            sleep 2
+
+            echo "Checking application..."
+            curl http://localhost:3000/api/health
