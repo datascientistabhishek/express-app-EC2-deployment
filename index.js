@@ -17,7 +17,7 @@ app.get('/api/health', (req, res) => {
 
 // Endpoint 2: Greeting endpoint with optional query parameter
 app.get('/api/greet', (req, res) => {
-  const name = req.query.name || 'World';
+  const name = req.query.name || 'Abhishek';
   res.json({
     message: `Hello This is, ${name}!`
   });
