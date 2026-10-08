@@ -23,6 +23,13 @@ app.get('/api/greet', (req, res) => {
   });
 });
 
+app.get('/api/greet1', (req, res) => {
+  const name = req.query.name || 'amit yadav';
+  res.json({
+    message: `Hello This is, ${name}!`
+  });
+});
+
 // 404 fallback for undefined routes
 app.use((req, res) => {
   res.status(404).json({
