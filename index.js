@@ -19,7 +19,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/greet', (req, res) => {
   const name = req.query.name || 'Abhishek singh';
   res.json({
-    message: `Hola, ${name}!`
+    message: `Konnichiwa, ${name}!`
   });
 });
 
