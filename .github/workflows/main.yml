@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to EC2
+    name: Deploy using Docker Compose
     runs-on: ubuntu-latest
 
     steps:
@@ -22,67 +22,28 @@ jobs:
           script: |
             echo "Connected to EC2"
 
-            # 1. Check Git
-            if ! command -v git >/dev/null 2>&1; then
-              echo "Git is not installed. Installing Git..."
-              sudo apt update
-              sudo apt install -y git
-            fi
-
-            # 2. Go to home directory
-            cd /home/ubuntu
-
-            # 3. Clone first time, otherwise pull latest code
-            if [ ! -d "express-app-EC2-deployment/.git" ]; then
-
-              echo "Repository not found. Cloning..."
-              git clone https://github.com/datascientistabhishek/express-app-EC2-deployment.git
-
-            else
-
-              echo "Repository already exists. Pulling latest changes..."
-              cd express-app-EC2-deployment
-              git fetch origin
-              git pull origin main
-
-            fi
-
-            # 4. Go inside application
+            # Go to application directory
             cd /home/ubuntu/express-app-EC2-deployment
 
-            # 5. Check Node.js
-            if ! command -v node >/dev/null 2>&1; then
-              echo "Node.js is not installed. Installing Node.js..."
+            # Get latest code from GitHub
+            echo "Pulling latest code..."
+            git pull origin main
 
-              sudo apt update
-              sudo apt install -y nodejs npm
+            # Stop and remove old container
+            echo "Stopping old Docker container..."
+            docker compose down
 
-            else
+            # Build new image and start container
+            echo "Building and starting Docker container..."
+            docker compose up -d --build
 
-              echo "Node.js is already installed."
-              node --version
-              npm --version
+            # Show running containers
+            echo "Checking Docker container..."
+            docker ps
 
-            fi
-
-            # 6. Install application dependencies
-            echo "Installing dependencies..."
-            npm install
-
-            # 7. Stop old application if running on port 3000
-            echo "Stopping old application..."
-
-            sudo fuser -k 3000/tcp || true
-
-            # 8. Start application
-            echo "Starting Express application..."
-
-            nohup npm start > app.log 2>&1 &
-
-            echo "Application started."
-
-            # 9. Show status
-            sleep 2
-
+            # Health check
             echo "Checking application..."
+            sleep 3
             curl http://localhost:3000/api/health
+
+            echo "Deployment completed successfully!"
