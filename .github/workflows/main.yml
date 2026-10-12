@@ -69,6 +69,8 @@ jobs:
   build-and-push:
     name: Build Docker Image and Push to ECR
     runs-on: ubuntu-latest
+    outputs:
+      ecr_password: ${{ steps.ecr-password.outputs.password }}
 
     steps:
       - name: Checkout source code
