@@ -1,6 +1,6 @@
 services:
   express-app:
-    build: .
+    image: 587917309662.dkr.ecr.us-east-1.amazonaws.com/express-app:latest
     container_name: express-app
     ports:
       - "3000:3000"
