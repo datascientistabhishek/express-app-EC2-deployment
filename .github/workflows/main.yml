@@ -1,49 +1,151 @@
-name: Deploy Express App to EC2
+# name: Deploy Express App to EC2
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     name: Deploy using Docker Compose
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Connect to EC2 and deploy
+#         uses: appleboy/ssh-action@v1
+#         with:
+#           host: ${{ secrets.HOST }}
+#           username: ${{ secrets.USERNAME }}
+#           key: ${{ secrets.KEY }}
+#           port: ${{ secrets.PORT }}
+
+#           script: |
+#             echo "Connected to EC2"
+
+#             # Go to application directory
+#             cd /home/ubuntu/express-app-EC2-deployment
+
+#             # Get latest code from GitHub
+#             echo "Pulling latest code..."
+#             git pull origin main
+
+#             # Stop and remove old container
+#             echo "Stopping old Docker container..."
+#             docker compose down
+
+#             # Build new image and start container
+#             echo "Building and starting Docker container..."
+#             docker compose up -d --build
+
+#             # Show running containers
+#             echo "Checking Docker container..."
+#             docker ps
+
+#             # Health check
+#             echo "Checking application..."
+#             sleep 3
+#             curl http://localhost:3000/api/health
+
+#             echo "Deployment completed successfully!"
+
+
+name: Build, Push to ECR and Deploy to EC2
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: express-app
+  ECR_REGISTRY: 587917309662.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_TAG: latest
+
 jobs:
+  build-and-push:
+    name: Build Docker Image and Push to ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ env.ECR_REGISTRY }}
+          REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          TAG: ${{ env.IMAGE_TAG }}
+        run: |
+          docker build -t "$REGISTRY/$REPOSITORY:$TAG" .
+          docker push "$REGISTRY/$REPOSITORY:$TAG"
+
+      - name: Prepare ECR login for EC2
+        id: ecr-password
+        shell: bash
+        run: |
+          PASSWORD=$(aws ecr get-login-password --region "$AWS_REGION")
+          echo "::add-mask::$PASSWORD"
+          echo "password=$PASSWORD" >> "$GITHUB_OUTPUT"
+
   deploy:
-    name: Deploy using Docker Compose
+    name: Deploy ECR Image to EC2
+    needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
       - name: Connect to EC2 and deploy
         uses: appleboy/ssh-action@v1
+        env:
+          ECR_REGISTRY: 587917309662.dkr.ecr.us-east-1.amazonaws.com
+          ECR_PASSWORD: ${{ needs.build-and-push.outputs.ecr_password }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
           port: ${{ secrets.PORT }}
-
+          envs: ECR_REGISTRY,ECR_PASSWORD
           script: |
+            set -e
+
             echo "Connected to EC2"
 
-            # Go to application directory
             cd /home/ubuntu/express-app-EC2-deployment
 
-            # Get latest code from GitHub
-            echo "Pulling latest code..."
+            echo "Pulling latest deployment configuration..."
             git pull origin main
 
-            # Stop and remove old container
-            echo "Stopping old Docker container..."
-            docker compose down
+            echo "Logging in to Amazon ECR..."
+            echo "$ECR_PASSWORD" | docker login \
+              --username AWS \
+              --password-stdin "$ECR_REGISTRY"
 
-            # Build new image and start container
-            echo "Building and starting Docker container..."
-            docker compose up -d --build
+            echo "Pulling image from ECR..."
+            docker compose pull
 
-            # Show running containers
-            echo "Checking Docker container..."
+            echo "Starting updated container..."
+            docker compose up -d --no-build --remove-orphans
+
+            echo "Checking running containers..."
             docker ps
 
-            # Health check
-            echo "Checking application..."
+            echo "Checking application health..."
             sleep 3
-            curl http://localhost:3000/api/health
+            curl --fail http://localhost:3000/api/health
 
             echo "Deployment completed successfully!"
